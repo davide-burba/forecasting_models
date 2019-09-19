@@ -4,8 +4,7 @@ An overview of time series forecasting models with sample code.
 
 The considered models' families are:
 
-- Naive, Seasonal Naive
-- Random Walk
+- Random Walk, Seasonal Naive
 - *Any model* + STL Decomposition
 - Exponential smoothing
 - SARIMA
