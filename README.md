@@ -15,6 +15,6 @@ The considered models' families are:
 - prophet
 
 WIP:
-- CNN,RNN (using *transfer learning*)
+- RNN 
 - seq2seq
 - wavenets
