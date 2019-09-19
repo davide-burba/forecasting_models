@@ -12,9 +12,9 @@ The considered models' families are:
 - Dynamic linear models
 - TBATS
 - NNETAR
+- prophet
 
 WIP:
-- prophet
 - CNN,RNN (using *transfer learning*)
 - seq2seq
 - wavenets

@@ -189,6 +189,8 @@ model = function(y, h){
 # perform decomposition
 my_forecast_plot(model,model_name)
 
+autoplot(model(train_data,24))
+
 # compute CV MAE
 cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
 mae = colMeans(abs(cv_residuals), na.rm = T)
@@ -356,20 +358,33 @@ models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,r
 
 ######## Prophet
 library(prophet)
+library(TSstudio)
 
-m <- prophet(train_data)
+model_name = "Prophet"
+model = function(y, h){
+  df = ts_to_prophet(y)
+  # fit the model
+  m <- prophet(df,yearly.seasonality = T,weekly.seasonality = F,daily.seasonality = F)
+  # make predictions
+  future <- make_future_dataframe(m, freq= "month", include_history = F, periods = h)
+  m %>% predict(future) -> pred
+  pred$yhat %>% ts(start = next_time_step(y),frequency = h) -> fcast
+  # make it a forecast object
+  fcast = structure(list(mean = fcast), class='forecast')
+  
+  print(end(y))
+  return(fcast)
+}
 
-future <- make_future_dataframe(m, periods = 365)
-tail(future)
+my_forecast_plot(model,model_name)
 
-forecast <- predict(m, future)
-tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
 
-plot(m, forecast)
-
-
-
-
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
 
 
 
