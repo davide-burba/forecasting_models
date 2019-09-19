@@ -1,0 +1,417 @@
+
+# just once
+library(fpp2)
+write.csv(elecequip,file = "elecequip.csv",row.names = FALSE)
+
+# Monthly manufacture of electrical equipment: computer, electronic and optical products. 
+# January 1996 - March 20h. Data adjusted by working days; Euro area (17 countries). Industry new orders index. 2005=100.
+
+# (Adjusted means divided by number of working days in a month)
+
+library(forecast)
+library(expsmooth)
+library(ggplot2)
+library(seasonal)
+library(rugarch)
+source("my_CV.R")
+
+df = read.csv("elecequip.csv")[,1]
+length_test_set = 24
+h = 12
+
+data = ts(df,start = c(1996,1),frequency = 12)
+train_data = ts(df[1:(length(df)-length_test_set)],start = c(1996,1), frequency = h)
+
+plot_time = "Year"
+
+
+
+############################################# EXPLORATION
+autoplot(train_data) +
+  ggtitle("Manufacture of electrical equipment") + 
+  xlab(plot_time) + ylab("New Orders Index")
+# non-linear trend, cycles, clear seasonality
+
+ggseasonplot(train_data, year.labels=TRUE, year.labels.left=TRUE) + ylab("New Orders Index") +
+  ggtitle("Seasonal plot: monthly manufacture of electrical equipment")
+
+ggseasonplot(train_data, polar=TRUE) + ylab("New Orders Index") +
+  ggtitle("Polar seasonal plot: monthly manufacture of electrical equipment")
+
+ggsubseriesplot(train_data)  + ylab("New Orders Index") +
+  ggtitle("Seasonal subseries plot: monthly manufacture of electrical equipment")
+
+ggAcf(train_data)
+
+# Decomposition
+fit = stl(train_data,t.window=13, s.window="periodic", robust=TRUE)
+autoplot(fit)
+
+# Seasonally adjusted time serie
+autoplot(train_data, series="Data") + 
+  autolayer(trendcycle(fit), series="Trend") + 
+  autolayer(seasadj(fit), series="Seasonally Adjusted") +
+  xlab(plot_time) + ylab("New orders index") +
+  ggtitle("Electrical equipment manufacturing (Euro area)") +
+  scale_colour_manual(values=c("gray","blue","red"),breaks=c("Data","Seasonally Adjusted","Trend"))
+
+
+########################################## MODELS VALIDATION
+models_mae = NULL
+initial_obs = 84
+
+# Some utility functions
+my_forecast_plot = function(model,model_name){
+  fit = model(window(train_data, end=2007),h=h)
+  autoplot(window(train_data, start = 2004,end=2008)) +
+    autolayer(fit, PI=TRUE,alpha = 0.25,color = "red") + 
+    autolayer(fit, PI=FALSE, series=model_name,size = 1) + 
+    xlab(plot_time) + ylab("New orders index") +
+    ggtitle("Electrical equipment manufacturing (Euro area)") +
+    guides(colour=guide_legend(title="Forecast"))
+}
+
+print_scores = function(models_mae){
+  for (model_name in unique(models_mae$model)){
+    print(paste(model_name,":",round(mean(models_mae[models_mae$model==model_name,"mae"]),2)))
+  }
+}
+
+plot_scores = function(models_mae,naive = TRUE){
+  if(naive){
+    ggplot(models_mae,aes(x=horizon,y=mae,factor=model,color = model))+geom_line()
+  }else{
+    ggplot(models_mae[(models_mae$model != "Naïve") & (models_mae$model != "Seasonal Naïve"),],aes(x=horizon,y=mae,factor=model,color = model))+geom_line()
+  }
+}
+
+next_time_step = function(y, is_end = F){
+  if(is_end){
+    new_start = y
+  }else{
+    new_start =  end(y)
+  }
+  if(new_start[2]==12){
+    new_start[1]=new_start[1]+1
+    new_start[2]=1
+  }else{
+    new_start[2]=new_start[2]+1
+  }
+  return(new_start)
+}
+
+previous_time_step = function(y){
+  new_start =  end(y)
+  if(new_start[2]==1){
+    new_start[1]=new_start[1]-1
+    new_start[2]=12
+  }else{
+    new_start[2]=new_start[2]-1
+  }
+  return(new_start)
+}
+
+####### NAIVE (Benchmark)
+model_name = "Naïve"
+model = naive
+
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+####### SNAIVE (Benchmark)
+model_name = "Seasonal Naïve"
+model = snaive
+
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+###### RW + DECOMPOSITION
+model_name = "RW+Decomposition"
+model = function(y, h){
+  stl_decomposition = stl(y, t.window=13, s.window="periodic",robust=TRUE)
+  return(forecast(stl_decomposition,method = "naive",h=h))
+}
+
+# perform decomposition
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+####### Exponential smoothing
+model_name = "Exp Smoothing"
+model = function(y, h){
+  fitted_model = ets(y)
+  return(forecast(fitted_model,h=h))
+}
+
+# perform decomposition
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+
+####### Exponential smoothing + DECOMPOSITION
+model_name = "Exp Smoothing+Decomposition"
+model = function(y, h){
+  stl_decomposition = stl(y, t.window=13, s.window="periodic",robust=TRUE)
+  return(forecast(stl_decomposition,method = "ets",h=h))
+}
+# perform decomposition
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+
+####### SARIMA
+print(auto.arima(train_data,stepwise = FALSE,approximation = FALSE))
+model_name = "SARIMA"
+model = function(y, h){forecast(Arima(y, order=c(3,1,0), seasonal = c(0,1,1)), h=h)}
+
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+####### ARIMA + Decomposition
+stl_decomposition = stl(train_data, t.window=13, s.window="periodic",robust=TRUE)
+print(auto.arima(seasadj(stl_decomposition),stepwise = FALSE,approximation = FALSE))
+
+model_name = "ARIMA + Decomposition"
+model = function(y, h){
+  fit = stlm(y,s.window="periodic", robust=TRUE,modelfunction=Arima, order=c(3,1,1))
+  return(forecast(fit,h=h))
+}
+
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+####### GARCH
+model_name = "GARCH + Decomposition"
+model = function(y, h){
+  # decomposition
+  stl_decomposition = stl(y, t.window=13, s.window="periodic",robust=TRUE)
+  
+  # garch on y_adjusted 
+  y_adjusted = seasadj(stl_decomposition)
+  diff_y_adjusted = diff(y_adjusted)
+  ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+             mean.model = list(armaOrder = c(3, 1))) %>%
+    ugarchfit(diff_y_adjusted, solver = 'hybrid',numderiv.control = list(hess.zero.tol=1e-7)) %>%
+    ugarchforecast(n.ahead = h) %>% 
+    fitted %>%
+    ts(frequency = h,start = next_time_step(y)) ->output_garch
+  
+  # add last observation:
+  output_garch = output_garch + y_adjusted[length(y_adjusted)]
+  
+  # get last year seasonality 
+  tmp = end(y)
+  tmp[1] = tmp[1]-1
+  new_start = next_time_step(tmp,is_end = T)
+  last_year_seasonality = window(seasonal(stl_decomposition),start = new_start)
+  
+  # sum them up
+  fcast = output_garch+ts(last_year_seasonality,frequency = h,start = start(output_garch))
+  
+  # make it a forecast object
+  fcast = structure(list(mean = fcast), class='forecast')
+  return(fcast)
+}
+
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+
+
+######## Dynamic linear model + Decomposition
+library(dlm)
+# define the dlm model 
+buildFun <- function(x) {
+  m = dlmModPoly(2, dV = exp(x[1]), dW = exp(c(x[2],x[3])), m0 = c(x[5],x[6]), C0 = exp(x[7])*diag(nrow = 2) ) 
+  return(m)
+}
+
+model_name = "DLM + Decomposition"
+model = function(y, h){
+  # decomposition
+  stl_decomposition = stl(y, t.window=13, s.window="periodic",robust=TRUE)
+  
+  # dlm on y_adjusted 
+  y_adjusted = seasadj(stl_decomposition)
+  
+  # fit the model 
+  fit <- dlmMLE(y_adjusted, parm = rep(0,7), build = buildFun)
+  my_model = buildFun(fit$par)
+  
+  # Forecast
+  my_Fore = dlmForecast(my_model,nAhead = h)
+  output = ts(my_Fore$f[,1], frequency = h,start = next_time_step(y))
+  print(output)
+  
+  # get last year seasonality 
+  tmp = end(y)
+  tmp[1] = tmp[1]-1
+  new_start = next_time_step(tmp,is_end = T)
+  last_year_seasonality = window(seasonal(stl_decomposition),start = new_start)
+  
+  # sum them up
+  fcast = output+ts(last_year_seasonality,frequency = h,start = start(output))
+  
+  # make it a forecast object
+  fcast = structure(list(mean = fcast), class='forecast')
+  
+  return(fcast)
+}
+
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+#cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+#mae = colMeans(abs(cv_residuals), na.rm = T)
+#print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+#models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+####### TBATS
+m = tbats(train_data,seasonal.periods = c(12))
+m
+
+model_name = "TBATS"
+model = function(y, h){
+  return(forecast(tbats(y,use.box.cox = TRUE,use.damped.trend = F,seasonal.periods = c(12),start.p=2,max.p=2,start.q=1,max.q=1), h=h))}
+
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+
+
+######## Prophet
+library(prophet)
+
+m <- prophet(train_data)
+
+future <- make_future_dataframe(m, periods = 365)
+tail(future)
+
+forecast <- predict(m, future)
+tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+
+plot(m, forecast)
+
+
+
+
+
+
+
+####### NNETAR
+model_name = "NNETAR"
+model = function(y, h){forecast(nnetar(y,p = 5, P = 2), h=h)}
+
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+
+####### NNETAR + Decomposition
+model_name = "NNETAR + Decomposition"
+model = function(y, h){
+  fit = stlm(y,s.window="periodic", robust=TRUE,modelfunction=nnetar, p=2,P=0)
+  return(forecast(fit,h=h))
+}
+my_forecast_plot(model,model_name)
+
+# compute CV MAE
+cv_residuals = tsCV(train_data,model,initial = initial_obs,h=h) 
+mae = colMeans(abs(cv_residuals), na.rm = T)
+print(paste("Average MAE across all the horizons for model",model_name,":",round(mean(mae),1)))
+
+# store MAE
+models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
+
+
+
+
+
+
+############## show results CV
+print_scores(models_mae)
+plot_scores(models_mae)
+plot_scores(models_mae,naive= F)
