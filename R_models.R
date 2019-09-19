@@ -1,19 +1,20 @@
 
 # just once
-library(fpp2)
-write.csv(elecequip,file = "elecequip.csv",row.names = FALSE)
+#library(fpp2)
+#write.csv(elecequip,file = "elecequip.csv",row.names = FALSE)
 
 # Monthly manufacture of electrical equipment: computer, electronic and optical products. 
 # January 1996 - March 20h. Data adjusted by working days; Euro area (17 countries). Industry new orders index. 2005=100.
 
 # (Adjusted means divided by number of working days in a month)
+setwd("~/Documents/nerd/time_series_forecasting")
 
 library(forecast)
 library(expsmooth)
 library(ggplot2)
 library(seasonal)
 library(rugarch)
-source("my_CV.R")
+source("utils.R")
 
 df = read.csv("elecequip.csv")[,1]
 length_test_set = 24
@@ -22,14 +23,12 @@ h = 12
 data = ts(df,start = c(1996,1),frequency = 12)
 train_data = ts(df[1:(length(df)-length_test_set)],start = c(1996,1), frequency = h)
 
-plot_time = "Year"
-
 
 
 ############################################# EXPLORATION
 autoplot(train_data) +
   ggtitle("Manufacture of electrical equipment") + 
-  xlab(plot_time) + ylab("New Orders Index")
+  xlab("Year") + ylab("New Orders Index")
 # non-linear trend, cycles, clear seasonality
 
 ggseasonplot(train_data, year.labels=TRUE, year.labels.left=TRUE) + ylab("New Orders Index") +
@@ -51,65 +50,17 @@ autoplot(fit)
 autoplot(train_data, series="Data") + 
   autolayer(trendcycle(fit), series="Trend") + 
   autolayer(seasadj(fit), series="Seasonally Adjusted") +
-  xlab(plot_time) + ylab("New orders index") +
+  xlab("Year") + ylab("New orders index") +
   ggtitle("Electrical equipment manufacturing (Euro area)") +
   scale_colour_manual(values=c("gray","blue","red"),breaks=c("Data","Seasonally Adjusted","Trend"))
+
 
 
 ########################################## MODELS VALIDATION
 models_mae = NULL
 initial_obs = 84
 
-# Some utility functions
-my_forecast_plot = function(model,model_name){
-  fit = model(window(train_data, end=2007),h=h)
-  autoplot(window(train_data, start = 2004,end=2008)) +
-    autolayer(fit, PI=TRUE,alpha = 0.25,color = "red") + 
-    autolayer(fit, PI=FALSE, series=model_name,size = 1) + 
-    xlab(plot_time) + ylab("New orders index") +
-    ggtitle("Electrical equipment manufacturing (Euro area)") +
-    guides(colour=guide_legend(title="Forecast"))
-}
 
-print_scores = function(models_mae){
-  for (model_name in unique(models_mae$model)){
-    print(paste(model_name,":",round(mean(models_mae[models_mae$model==model_name,"mae"]),2)))
-  }
-}
-
-plot_scores = function(models_mae,naive = TRUE){
-  if(naive){
-    ggplot(models_mae,aes(x=horizon,y=mae,factor=model,color = model))+geom_line()
-  }else{
-    ggplot(models_mae[(models_mae$model != "Naïve") & (models_mae$model != "Seasonal Naïve"),],aes(x=horizon,y=mae,factor=model,color = model))+geom_line()
-  }
-}
-
-next_time_step = function(y, is_end = F){
-  if(is_end){
-    new_start = y
-  }else{
-    new_start =  end(y)
-  }
-  if(new_start[2]==12){
-    new_start[1]=new_start[1]+1
-    new_start[2]=1
-  }else{
-    new_start[2]=new_start[2]+1
-  }
-  return(new_start)
-}
-
-previous_time_step = function(y){
-  new_start =  end(y)
-  if(new_start[2]==1){
-    new_start[1]=new_start[1]-1
-    new_start[2]=12
-  }else{
-    new_start[2]=new_start[2]-1
-  }
-  return(new_start)
-}
 
 ####### NAIVE (Benchmark)
 model_name = "Naïve"
@@ -126,6 +77,7 @@ print(paste("Average MAE across all the horizons for model",model_name,":",round
 models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
 
 
+
 ####### SNAIVE (Benchmark)
 model_name = "Seasonal Naïve"
 model = snaive
@@ -139,6 +91,7 @@ print(paste("Average MAE across all the horizons for model",model_name,":",round
 
 # store MAE
 models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
 
 
 ###### RW + DECOMPOSITION
@@ -158,6 +111,7 @@ print(paste("Average MAE across all the horizons for model",model_name,":",round
 
 # store MAE
 models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
 
 
 ####### Exponential smoothing
@@ -217,6 +171,7 @@ print(paste("Average MAE across all the horizons for model",model_name,":",round
 models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
 
 
+
 ####### ARIMA + Decomposition
 stl_decomposition = stl(train_data, t.window=13, s.window="periodic",robust=TRUE)
 print(auto.arima(seasadj(stl_decomposition),stepwise = FALSE,approximation = FALSE))
@@ -236,6 +191,7 @@ print(paste("Average MAE across all the horizons for model",model_name,":",round
 
 # store MAE
 models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
+
 
 
 ####### GARCH
@@ -280,7 +236,6 @@ print(paste("Average MAE across all the horizons for model",model_name,":",round
 
 # store MAE
 models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
-
 
 
 
@@ -335,6 +290,7 @@ my_forecast_plot(model,model_name)
 #models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
 
 
+
 ####### TBATS
 m = tbats(train_data,seasonal.periods = c(12))
 m
@@ -352,7 +308,6 @@ print(paste("Average MAE across all the horizons for model",model_name,":",round
 
 # store MAE
 models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
-
 
 
 
@@ -419,8 +374,6 @@ print(paste("Average MAE across all the horizons for model",model_name,":",round
 
 # store MAE
 models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,row.names = NULL))
-
-
 
 
 
