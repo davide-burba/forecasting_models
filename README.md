@@ -1,4 +1,4 @@
-# forecasting_models
+# Time Series forecasting models
 
 An overview of time series forecasting models with sample code.
 
