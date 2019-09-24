@@ -13,8 +13,6 @@ The considered models' families are:
 - TBATS
 - NNETAR
 - prophet
+- LSTM
+- seq2seq (LSTM, CNN)
 
-WIP:
-- RNN 
-- seq2seq
-- wavenets
