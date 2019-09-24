@@ -14,5 +14,5 @@ The considered models' families are:
 - NNETAR
 - prophet
 - LSTM
-- seq2seq (LSTM, CNN)
+- Encoder Decoder (LSTM, CNN)
 
