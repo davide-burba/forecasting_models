@@ -6,7 +6,7 @@
 # Monthly manufacture of electrical equipment: computer, electronic and optical products. 
 # January 1996 - March 20h. Data adjusted by working days; Euro area (17 countries). Industry new orders index. 2005=100.
 
-# (Adjusted means divided by number of working days in a month)
+# ("Adjusted" means "divided by number of working days in a month")
 setwd("~/Documents/nerd/time_series_forecasting")
 
 library(forecast)
@@ -54,6 +54,13 @@ autoplot(train_data, series="Data") +
   ggtitle("Electrical equipment manufacturing (Euro area)") +
   scale_colour_manual(values=c("gray","blue","red"),breaks=c("Data","Seasonally Adjusted","Trend"))
 
+
+
+########################################## NOISE
+wn = data.frame(x = 1:100,y = rnorm(100,mean = 6))
+ggplot(wn,aes(x=x,y=y)) + 
+  geom_line() + 
+  ggtitle("White Noise")
 
 
 ########################################## MODELS VALIDATION
@@ -327,7 +334,7 @@ model = function(y, h){
   # make it a forecast object
   fcast = structure(list(mean = fcast), class='forecast')
   
-  print(end(y))
+  #print(end(y))
   return(fcast)
 }
 
@@ -381,5 +388,28 @@ models_mae = rbind(models_mae,data.frame(model = model_name, mae,horizon = 1:h,r
 
 ############## show results CV
 print_scores(models_mae)
+get_best_models(models_mae)
+
 plot_scores(models_mae)
 plot_scores(models_mae,naive= F)
+plot_scores(models_mae[models_mae$model %in% c("SARIMA","TBATS","RW+Decomposition","NNETAR + Decomposition"),])
+
+
+
+############################################# EVALUATION
+
+mae_test = NULL
+
+# fit the best model on training data
+fitted_nnetar = stlm(train_data,s.window="periodic", robust=TRUE,modelfunction=nnetar, p=2,P=0)
+test_residuals = colMeans(abs(evaluate_test_residuals(fitted_nnetar,stlm,data)),na.rm=T)
+print(paste("Mean abs. error NNETAR on test set:",round(mean(abs_mean_errors),2)))
+
+ggplot(NULL,aes(x = 1:12, y = test_residuals))+
+  geom_point()+
+  geom_line()+
+  scale_x_continuous(breaks = 1:12) +
+  xlab("horizon [months]")+
+  ylab("MAE")+
+  ggtitle("NNETAR - MAE test set")
+  

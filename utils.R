@@ -3,7 +3,7 @@ library(forecast)
 
 
 # Alternative to tsCV, to use only subset of last time_steps 
-# Warning: shpuld be generalized
+# Warning: should be generalized
 my_CV = function(y, 
                  forecastfunction,
                  h=12,
@@ -53,7 +53,7 @@ my_forecast_plot = function(model,model_name){
   autoplot(window(train_data, start = 2004,end=2008)) +
     autolayer(fit, PI=TRUE,alpha = 0.25,color = "red") + 
     autolayer(fit, PI=FALSE, series=model_name,size = 1) + 
-    xlab(plot_time) + ylab("New orders index") +
+    xlab("Year") + ylab("New orders index") +
     ggtitle("Electrical equipment manufacturing (Euro area)") +
     guides(colour=guide_legend(title="Forecast"))
 }
@@ -68,9 +68,15 @@ print_scores = function(models_mae){
 
 plot_scores = function(models_mae,naive = TRUE){
   if(naive){
-    ggplot(models_mae,aes(x=horizon,y=mae,factor=model,color = model))+geom_line()
+  ggplot(models_mae,aes(x=horizon,y=mae,factor=model,color = model))+
+      geom_point()+
+      geom_line()+
+      scale_x_continuous(breaks = 1:12) 
   }else{
-    ggplot(models_mae[(models_mae$model != "Naïve") & (models_mae$model != "Seasonal Naïve"),],aes(x=horizon,y=mae,factor=model,color = model))+geom_line()
+    ggplot(models_mae[(models_mae$model != "Naïve") & (models_mae$model != "Seasonal Naïve"),],aes(x=horizon,y=mae,factor=model,color = model))+
+      geom_point()+
+      geom_line()+
+      scale_x_continuous(breaks = 1:12) 
   }
 }
 
@@ -100,4 +106,38 @@ previous_time_step = function(y){
     new_start[2]=new_start[2]-1
   }
   return(new_start)
+}
+
+
+
+get_best_models = function(models_mae){
+  best_models = NULL
+  for(i in 1:12){
+    tmp = models_mae[models_mae$horizon==i,]
+    best_models  = rbind(best_models,tmp[tmp$mae==min(tmp$mae),])
+  }
+  rownames(best_models)=NULL
+  return(best_models)
+}
+
+
+evaluate_test_residuals = function(fitted_model, model_function,data,...){
+  errors = NULL
+  for(i in 1:35){
+    data[1:(length(train_data)-12+i)] %>%
+      ts(frequency = 12,start = start(data)) %>%
+      model_function(model = fitted_model) %>%   # use the fitted model to forecast test data
+      forecast(h=h,...) -> pred
+    
+    true_values = c(window(data,start = start(pred$mean),end=end(pred$mean)))
+    pred_mean = c(pred$mean)
+    if(i < 12){
+      pred_mean[1:(12-i)]=NA
+    }
+    if(length(true_values) < 12){
+      true_values = c(true_values, rep(NA,12-length(true_values)))
+    }
+    errors = rbind(errors,true_values-pred_mean)
+  }
+  return(errors)
 }
