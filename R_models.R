@@ -42,6 +42,8 @@ ggsubseriesplot(train_data)  + ylab("New Orders Index") +
 
 ggAcf(train_data)
 
+pacf(train_data)
+
 # Decomposition
 fit = stl(train_data,t.window=13, s.window="periodic", robust=TRUE)
 autoplot(fit)
@@ -57,7 +59,7 @@ autoplot(train_data, series="Data") +
 
 
 ########################################## NOISE
-wn = data.frame(x = 1:100,y = rnorm(100,mean = 6))
+wn = data.frame(x = 1:200,y = rnorm(200,mean = 6))
 ggplot(wn,aes(x=x,y=y)) + 
   geom_line() + 
   ggtitle("White Noise")
@@ -403,7 +405,7 @@ mae_test = NULL
 # fit the best model on training data
 fitted_nnetar = stlm(train_data,s.window="periodic", robust=TRUE,modelfunction=nnetar, p=2,P=0)
 test_residuals = colMeans(abs(evaluate_test_residuals(fitted_nnetar,stlm,data)),na.rm=T)
-print(paste("Mean abs. error NNETAR on test set:",round(mean(abs_mean_errors),2)))
+print(paste("Mean abs. error NNETAR+Decomposition on test set:",round(mean(test_residuals),2)))
 
 ggplot(NULL,aes(x = 1:12, y = test_residuals))+
   geom_point()+
@@ -411,5 +413,5 @@ ggplot(NULL,aes(x = 1:12, y = test_residuals))+
   scale_x_continuous(breaks = 1:12) +
   xlab("horizon [months]")+
   ylab("MAE")+
-  ggtitle("NNETAR - MAE test set")
+  ggtitle("NNETAR+Decomposition - MAE test set")
   
