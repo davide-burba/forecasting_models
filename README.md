@@ -1,6 +1,6 @@
 # Time Series forecasting models
 
-An overview of time series forecasting models with sample code.
+An overview of time series forecasting models with sample code. The related article is available [here](https://towardsdatascience.com/an-overview-of-time-series-forecasting-models-a2fa7a358fcb).
 
 The considered models' families are:
 
@@ -20,4 +20,4 @@ The considered models' families are:
 - Encoder Decoder 
 
 
-The related article is available [here](https://towardsdatascience.com/an-overview-of-time-series-forecasting-models-a2fa7a358fcb)
+
