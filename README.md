@@ -4,7 +4,7 @@ An overview of time series forecasting models with sample code.
 
 The considered models' families are:
 
-R:
+**R**:
 - Naive, Seasonal Naive
 - *Any model* + STL Decomposition
 - Exponential smoothing
@@ -15,7 +15,7 @@ R:
 - NNETAR
 - prophet
 
-Python:
+**Python:**
 - LSTM
 - Encoder Decoder 
 
