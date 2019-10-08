@@ -4,7 +4,8 @@ An overview of time series forecasting models with sample code.
 
 The considered models' families are:
 
-- Random Walk, Seasonal Naive
+R:
+- Naive, Seasonal Naive
 - *Any model* + STL Decomposition
 - Exponential smoothing
 - SARIMA
@@ -13,6 +14,10 @@ The considered models' families are:
 - TBATS
 - NNETAR
 - prophet
-- LSTM
-- Encoder Decoder (LSTM, CNN)
 
+Python:
+- LSTM
+- Encoder Decoder 
+
+
+The related article is available [here](https://towardsdatascience.com/an-overview-of-time-series-forecasting-models-a2fa7a358fcb)
